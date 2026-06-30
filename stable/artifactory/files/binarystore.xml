@@ -282,13 +282,13 @@
         <useHttp>{{ . }}</useHttp>
         {{- end }}
         {{- with .maxConnections }}
-        <maxConnections>{{ . }}</maxConnections>
+        <maxConnections>{{ . | int64 }}</maxConnections>
         {{- end }}
         {{- with .connectionTimeout }}
-        <connectionTimeout>{{ . }}</connectionTimeout>
+        <connectionTimeout>{{ . | int64 }}</connectionTimeout>
         {{- end }}
         {{- with .socketTimeout }}
-        <socketTimeout>{{ . }}</socketTimeout>
+        <socketTimeout>{{ . | int64 }}</socketTimeout>
         {{- end }}
         {{- with .kmsServerSideEncryptionKeyId }}
         <kmsServerSideEncryptionKeyId>{{ . }}</kmsServerSideEncryptionKeyId>
@@ -316,17 +316,65 @@
         {{- with .cloudFrontPrivateKey }}
         <cloudFrontPrivateKey>{{ . }}</cloudFrontPrivateKey>
         {{- end }}
-        {{- with .enableSignedUrlRedirect }}
-        <enableSignedUrlRedirect>{{ . }}</enableSignedUrlRedirect>
+        {{- if hasKey . "enableSignedUrlRedirect" }}
+        <enableSignedUrlRedirect>{{ .enableSignedUrlRedirect }}</enableSignedUrlRedirect>
         {{- end }}
-        {{- with .enablePathStyleAccess }}
-        <enablePathStyleAccess>{{ . }}</enablePathStyleAccess>
+        {{- if hasKey . "enablePathStyleAccess" }}
+        <enablePathStyleAccess>{{ .enablePathStyleAccess }}</enablePathStyleAccess>
         {{- end }}
         {{- with .multiPartLimit }}
         <multiPartLimit>{{ . | int64 }}</multiPartLimit>
         {{- end }}
         {{- with .multipartElementSize }}
         <multipartElementSize>{{ . | int64 }}</multipartElementSize>
+        {{- end }}
+        {{- with .awsSdkV2 }}
+        <awsSdkV2>{{ . }}</awsSdkV2>
+        {{- end }}
+        {{- with .connectionAcquisitionTimeout }}
+        <connectionAcquisitionTimeout>{{ . | int64 }}</connectionAcquisitionTimeout>
+        {{- end }}
+        {{- with .proxyHost }}
+        <proxyHost>{{ . }}</proxyHost>
+        {{- end }}
+        {{- with .proxyPort }}
+        <proxyPort>{{ . | int64 }}</proxyPort>
+        {{- end }}
+        {{- with .nonProxyHost }}
+        <nonProxyHost>{{ . }}</nonProxyHost>
+        {{- end }}
+        {{- with .proxyIdentity }}
+        <proxyIdentity>{{ . }}</proxyIdentity>
+        {{- end }}
+        {{- with .proxyCredential }}
+        <proxyCredential>{{ . }}</proxyCredential>
+        {{- end }}
+        {{- with .disableChecksumValidation }}
+        <disableChecksumValidation>{{ . }}</disableChecksumValidation>
+        {{- end }}
+        {{- with .disableChunkedEncoding }}
+        <disableChunkedEncoding>{{ . }}</disableChunkedEncoding>
+        {{- end }}
+        {{- with .crtTargetThroughputInGbps }}
+        <crtTargetThroughputInGbps>{{ . }}</crtTargetThroughputInGbps>
+        {{- end }}
+        {{- with .crtEnableConnectionHealth }}
+        <crtEnableConnectionHealth>{{ . }}</crtEnableConnectionHealth>
+        {{- end }}
+        {{- with .crtMinimumThroughputTimeoutSeconds }}
+        <crtMinimumThroughputTimeoutSeconds>{{ . | int64 }}</crtMinimumThroughputTimeoutSeconds>
+        {{- end }}
+        {{- with .crtMinimumThroughputInBps }}
+        <crtMinimumThroughputInBps>{{ . | int64 }}</crtMinimumThroughputInBps>
+        {{- end }}
+        {{- with .kmsClientSideEncryptionKeyId }}
+        <kmsClientSideEncryptionKeyId>{{ . }}</kmsClientSideEncryptionKeyId>
+        {{- end }}
+        {{- with index . "server-side-encryption-aws-kms" }}
+        <server-side-encryption-aws-kms>{{ . }}</server-side-encryption-aws-kms>
+        {{- end }}
+        {{- with .encryptionFormat }}
+        <encryptionFormat>{{ . }}</encryptionFormat>
         {{- end }}
     </provider>
     {{- end }}
