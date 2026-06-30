@@ -82,10 +82,10 @@ artifactory:
     resources:
       requests:
         cpu: 100m
-        memory: 150Mi
+        memory: 250Mi
       limits:
         # cpu: "2"
-        memory: 250Mi
+        memory: 500Mi
   
   metadata:
     database:
@@ -225,6 +225,24 @@ artifactory:
       limits:
         # cpu: "2"
         memory: 1Gi
+  
+  apptrust:
+    resources:
+      requests:
+        cpu: 300m
+        memory: 150Mi
+      limits:
+        # cpu: "2"
+        memory: 500Mi
+  
+  unifiedpolicy:
+    resources:
+      requests:
+        cpu: 300m
+        memory: 150Mi
+      limits:
+        # cpu: "2"
+        memory: 500Mi
 xray:
   ##############################################################
   # The small sizing
@@ -302,16 +320,6 @@ xray:
       limits:
         # cpu: "1"
         memory: 250Mi
-  
-  panoramic:
-    resources:
-      requests:
-        cpu: "100m"
-        memory: 250Mi
-      limits:
-        # cpu: "4"
-        memory: 8Gi
-  
   sbom:
     resources:
       requests:
