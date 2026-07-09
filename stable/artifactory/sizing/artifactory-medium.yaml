@@ -81,10 +81,10 @@ frontend:
   resources:
     requests:
       cpu: 100m
-      memory: 150Mi
+      memory: 500Mi
     limits:
       # cpu: "2"
-      memory: 250Mi
+      memory: 1Gi
 
 metadata:
   database:
@@ -221,6 +221,24 @@ platformfederation:
     requests:
       cpu: 150m
       memory: 150Mi
+    limits:
+      # cpu: "2"
+      memory: 1Gi
+
+apptrust:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1Gi
+
+unifiedpolicy:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
     limits:
       # cpu: "2"
       memory: 1Gi
