@@ -81,11 +81,11 @@ artifactory:
   frontend:
     resources:
       requests:
-        cpu: 200m
-        memory: 300Mi
+        cpu: "1"
+        memory: 1Gi
       limits:
         # cpu: "3"
-        memory: 1Gi
+        memory: 2Gi
   
   metadata:
     database:
@@ -225,6 +225,24 @@ artifactory:
       limits:
         # cpu: "4"
         memory: 2Gi
+  
+  apptrust:
+    resources:
+      requests:
+        cpu: 2
+        memory: 1Gi
+      limits:
+        # cpu: "4"
+        memory: 2Gi
+  
+  unifiedpolicy:
+    resources:
+      requests:
+        cpu: 2
+        memory: 1Gi
+      limits:
+        # cpu: "4"
+        memory: 2Gi
 xray:
   ##############################################################
   # The xlarge sizing
@@ -302,15 +320,6 @@ xray:
       limits:
         # cpu: "1"
         memory: 250Mi
-  
-  panoramic:
-    resources:
-      requests:
-        cpu: "100m"
-        memory: 250Mi
-      limits:
-        # cpu: "4"
-        memory: 8Gi
   
   sbom:
     resources:
