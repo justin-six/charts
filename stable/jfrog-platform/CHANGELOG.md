@@ -1,6 +1,52 @@
 # JFrog Platform Chart Changelog (GA releases only)
 All changes to this chart will be documented in this file.
 
+## [11.5.8] - July 11, 2026
+* Update dependency artifactory chart version to 107.146.25
+* Update dependency distribution chart version to 102.52.2
+
+## [11.5.7] - July 06, 2026
+* Update dependency xray chart version to 103.143.30
+* Update rabbitmq.migration.image.tag to 1.35.6
+* Added rabbitmq `quorum_queue_non_voters` feature flag and increased `max_message_size` to 128 MB.
+
+## [11.5.6] - June 29, 2026
+* Update dependency artifactory chart version to 107.146.22
+
+## [11.5.5] - June 15, 2026
+* Update dependency artifactory chart version to 107.146.17
+* Update dependency xray chart version to 103.143.26
+* Update dependency distribution chart version to 102.40.5
+* Update dependency catalog chart version to 101.40.2
+
+## [11.5.4] - May 28, 2026
+* Update dependency catalog chart version to 101.39.1
+* Update dependency artifactory chart version to 107.146.15
+* Update dependency catalog chart version to 101.39.0
+* Update dependency artifactory chart version to 107.146.13
+* Update dependency xray chart version to 103.143.19
+
+## [11.5.3] - May 19, 2026
+* Update dependency artifactory chart version to 107.146.12
+* Update dependency xray chart version to 103.143.16
+* Update dependency catalog chart version to 101.38.2
+
+## [11.5.2] - May 13, 2026
+* Update dependency artifactory chart version to 107.146.10
+* Update dependency xray chart version to 103.143.12
+
+## [11.5.1] - April 29, 2026
+* Update dependency artifactory chart version to 107.146.8
+* Update dependency xray chart version to 103.143.6
+* Update dependency catalog chart version to 101.37.2
+
+## [11.5.0] - April 17, 2026
+* Update dependency artifactory chart version to 107.146.7
+* Update dependency catalog chart version to 101.35.2
+* Update dependency distribution chart version to 102.38.0
+* **IMPORTANT**
+* Added new dependency chart `bridge` which is disabled by default and set `bridge.enabled: true` to enable it. More info [here](https://jfrog.com/help/r/jfrog-installation-setup-documentation/install-bridge-client-service)
+
 ## [11.4.6] - April 06, 2026
 * Update dependency artifactory chart version to 107.133.17
 * Update dependency xray chart version to 103.137.27
