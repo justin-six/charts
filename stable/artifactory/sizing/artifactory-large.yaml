@@ -80,10 +80,10 @@ router:
 frontend:
   resources:
     requests:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 200m
+      memory: 800Mi
     limits:
-      # cpu: "5"
+      # cpu: "2"
       memory: 2Gi
 
 metadata:
@@ -224,4 +224,22 @@ platformfederation:
       memory: 160Mi
     limits:
       # cpu: "1"
+      memory: 1.5Gi
+
+apptrust:
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1.5Gi
+
+unifiedpolicy:
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
       memory: 1.5Gi
