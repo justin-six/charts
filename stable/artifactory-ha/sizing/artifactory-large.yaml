@@ -86,10 +86,10 @@ router:
 frontend:
   resources:
     requests:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 200m
+      memory: 800Mi
     limits:
-      # cpu: "5"
+      # cpu: "2"
       memory: 2Gi
 
 metadata:
@@ -222,6 +222,15 @@ jfbus:
       # cpu: "2"
       memory: 3500Mi
 
+jfmelt:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1Gi
+
 platformfederation:
   resources:
     requests:
@@ -229,4 +238,31 @@ platformfederation:
       memory: 160Mi
     limits:
       # cpu: "1"
+      memory: 1.5Gi
+
+apptrust:
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1.5Gi
+
+unifiedpolicy:
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1.5Gi
+
+evaluation:
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
       memory: 1.5Gi

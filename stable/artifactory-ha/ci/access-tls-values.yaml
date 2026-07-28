@@ -1,17 +1,10 @@
 databaseUpgradeReady: true
 artifactory:
   masterKey: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  joinKey: EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
   persistence:
     enabled: false
   primary:
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "2"
-      limits:
-        memory: "6Gi"
-        cpu: "4"
-  node:
     resources:
       requests:
         memory: "4Gi"

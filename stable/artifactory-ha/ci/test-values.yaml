@@ -5,6 +5,7 @@ artifactory:
   podSecurityContext:
     fsGroupChangePolicy: "OnRootMismatch"
   masterKey: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  joinKey: EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
   unifiedSecretInstallation: false
   persistence:
     enabled: false
@@ -19,14 +20,6 @@ artifactory:
     javaOpts:
       xms: "4g"
       xmx: "4g"
-  node:
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "2"
-      limits:
-        memory: "6Gi"
-        cpu: "4"
   statefulset:
     annotations:
       artifactory: test

@@ -19,18 +19,6 @@ The primary node name
 {{- end -}}
 
 {{/*
-The member node name
-*/}}
-{{- define "artifactory-ha.node.name" -}}
-{{- if .Values.nameOverride -}}
-{{- printf "%s-member" .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
-{{- else -}}
-{{- $name := .Release.Name | trunc 29 -}}
-{{- printf "%s-%s-member" $name .Chart.Name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
 Expand the name nginx service.
 */}}
 {{- define "artifactory-ha.nginx.name" -}}
@@ -92,7 +80,10 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
-Generate SSL certificates
+Generate a self-signed TLS certificate. Used only when
+.Values.nginx.generateSelfSignedCert=true AND no legacy Secret exists.
+This is opt-in and disabled by default. It is intended for dev/test only —
+production installs should supply their own certificate via nginx.tlsSecretName.
 */}}
 {{- define "artifactory-ha.gen-certs" -}}
 {{- $altNames := list ( printf "%s.%s" (include "artifactory-ha.fullname" .) .Release.Namespace ) ( printf "%s.%s.svc" (include "artifactory-ha.fullname" .) .Release.Namespace ) -}}
@@ -100,6 +91,85 @@ Generate SSL certificates
 {{- $cert := genSignedCert ( include "artifactory-ha.fullname" . ) nil $altNames 365 $ca -}}
 tls.crt: {{ $cert.Cert | b64enc }}
 tls.key: {{ $cert.Key | b64enc }}
+{{- end -}}
+
+{{/*
+Resolve the TLS secret name to use for nginx HTTPS.
+Priority:
+  1. .Values.nginx.tlsSecretName (custom) — preferred
+  2. Legacy in-cluster secret <fullname>-nginx-certificate — upgrade-safety fallback
+  3. Chart-generated Secret when .Values.nginx.generateSelfSignedCert=true (opt-in, dev/test)
+  4. Empty string — no cert available
+*/}}
+{{- define "nginx.tlsSecretEffective" -}}
+{{- if .Values.nginx.tlsSecretName -}}
+{{- .Values.nginx.tlsSecretName -}}
+{{- else -}}
+{{- $legacyName := printf "%s-nginx-certificate" (include "artifactory-ha.fullname" .) -}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $legacyName -}}
+{{- if $existing -}}
+{{- $legacyName -}}
+{{- else if .Values.nginx.generateSelfSignedCert -}}
+{{- $legacyName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+True (non-empty) only when HTTPS is requested AND a cert is actually available
+(custom, legacy in-cluster, or chart-generated when opt-in flag is on).
+Used to gate ssl_certificate directives, HTTPS listens, and 443 service ports.
+*/}}
+{{- define "nginx.httpsEffective" -}}
+{{- if and .Values.nginx.https.enabled (include "nginx.tlsSecretEffective" .) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Fresh-install validation: HTTPS is enabled but no TLS secret path is available.
+Returns "true" only when the install must be blocked. The install is allowed if:
+  - nginx.tlsSecretName is set (custom cert), OR
+  - nginx.generateSelfSignedCert=true (opt-in chart-generated cert), OR
+  - nginx.https.enabled=false (HTTP only), OR
+  - it's an upgrade (existing installs are exempt via the tlsSecretEffective lookup fallback).
+*/}}
+{{- define "nginx.tlsCertMissingOnInstall" -}}
+{{- if and .Release.IsInstall .Values.nginx.enabled .Values.nginx.https.enabled (not .Values.nginx.tlsSecretName) (not .Values.nginx.generateSelfSignedCert) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Rich, joinKey/masterKey-style error message rendered when nginx HTTPS is on
+but no TLS secret was provided AND self-signed generation is not enabled.
+*/}}
+{{- define "nginx.tlsCertValidationFailMessage" -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: MISSING NGINX TLS CERTIFICATE (Artifactory HA)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "nginx.https.enabled=true but nginx.tlsSecretName is not set,\n" -}}
+{{- print "and nginx.generateSelfSignedCert is not enabled.\n" -}}
+{{- print "By default this chart does NOT generate TLS certificates.\n\n" -}}
+{{- print "👉 OPTION 1 (Production Recommended): SUPPLY YOUR OWN CERTIFICATE\n" -}}
+{{- print "      Create a kubernetes.io/tls secret:\n" -}}
+{{- printf "      kubectl create secret tls artifactory-nginx-tls -n %s \\\n" .Release.Namespace -}}
+{{- print "        --cert=./tls.crt --key=./tls.key\n" -}}
+{{- print "      Reference the secret name in helm values:\n" -}}
+{{- print "      --set nginx.tlsSecretName=artifactory-nginx-tls\n\n" -}}
+{{- print "👉 OPTION 2 (Dev/Test only): OPT IN TO A SELF-SIGNED CERTIFICATE\n" -}}
+{{- print "      Enable chart-side generation in helm values:\n" -}}
+{{- print "      --set nginx.generateSelfSignedCert=true\n" -}}
+{{- print "      WARNING: The chart-generated key is unique per install but is not\n" -}}
+{{- print "               issued by a trusted CA. Do not use in production.\n\n" -}}
+{{- print "👉 OPTION 3: DISABLE HTTPS (HTTP only)\n" -}}
+{{- print "      Disable HTTPS in helm values:\n" -}}
+{{- print "      --set nginx.https.enabled=false\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "    https://docs.jfrog.com/installation/docs/establish-tls-in-artifactory-and-jfrog-platform\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "\n" -}}
 {{- end -}}
 
 {{/*
@@ -336,6 +406,12 @@ Return the proper artifactory chart image names
     {{- if and $dot.Values.global.digests.jfbus (eq $indexReference "jfbus") }}
     {{- $digest = $dot.Values.global.digests.jfbus | toString -}}
     {{- end -}}
+    {{- if and $dot.Values.global.versions.jfmelt (eq $indexReference "jfmelt") }}
+    {{- $tag = $dot.Values.global.versions.jfmelt | toString -}}
+    {{- end -}}
+    {{- if and $dot.Values.global.digests.jfmelt (eq $indexReference "jfmelt") }}
+    {{- $digest = $dot.Values.global.digests.jfmelt | toString -}}
+    {{- end -}}
     {{- if and $dot.Values.global.versions.platformfederation (eq $indexReference "platformfederation") }}
     {{- $tag = $dot.Values.global.versions.platformfederation | toString -}}
     {{- end -}}
@@ -347,6 +423,12 @@ Return the proper artifactory chart image names
     {{- end -}}
     {{- if and $dot.Values.global.digests.unifiedpolicy (eq $indexReference "unifiedpolicy") }}
     {{- $digest = $dot.Values.global.digests.unifiedpolicy | toString -}}
+    {{- end -}}
+    {{- if and $dot.Values.global.versions.evaluation (eq $indexReference "evaluation") }}
+    {{- $tag = $dot.Values.global.versions.evaluation | toString -}}
+    {{- end -}}
+    {{- if and $dot.Values.global.digests.evaluation (eq $indexReference "evaluation") }}
+    {{- $digest = $dot.Values.global.digests.evaluation | toString -}}
     {{- end -}}
     {{- if $dot.Values.global.versions.artifactory }}
         {{- if or (eq $indexReference "artifactory") (eq $indexReference "metadata") (eq $indexReference "nginx") }}
@@ -364,6 +446,12 @@ Return the proper artifactory chart image names
     {{- end -}}
     {{- if and $dot.Values.global.digests.observability (eq $indexReference "observability") }}
     {{- $digest = $dot.Values.global.digests.observability | toString -}}
+    {{- end -}}
+    {{- if and $dot.Values.global.versions.frontend (eq $indexReference "frontend") }}
+    {{- $tag = $dot.Values.global.versions.frontend | toString -}}
+    {{- end -}}
+    {{- if and $dot.Values.global.digests.frontend (eq $indexReference "frontend") }}
+    {{- $digest = $dot.Values.global.digests.frontend | toString -}}
     {{- end -}}
     {{- if and $dot.Values.global.digests.nginx (eq $indexReference "nginx") }}
     {{- $digest = $dot.Values.global.digests.nginx | toString -}}
@@ -475,7 +563,7 @@ Resolve requiredServiceTypes value
 {{- if .Values.event.enabled -}}
   {{- $requiredTypes = printf "%s,%s" $requiredTypes "jfevt" -}}
 {{- end -}}
-{{- if .Values.frontend.enabled -}}
+{{- if and .Values.frontend.enabled (not .Values.frontend.asPod) -}}
   {{- $requiredTypes = printf "%s,%s" $requiredTypes "jffe" -}}
 {{- end -}}
 {{- if .Values.jfconnect.enabled -}}
@@ -505,11 +593,21 @@ nginx scheme (http/https)
 {{- define "nginx.scheme" -}}
 {{- if .Values.nginx.http.enabled -}}
 {{- printf "%s" "http" -}}
-{{- else -}}
+{{- else if include "nginx.httpsEffective" . -}}
 {{- printf "%s" "https" -}}
+{{- else -}}
+{{- printf "%s" "http" -}}
 {{- end -}}
 {{- end -}}
 
+{{/*
+Check usage of curl --haproxy-protocol flag
+*/}}
+{{- define "curl.haproxyprotocol" -}}
+{{ if or (and .Values.nginx.http.enabled .Values.nginx.httpUseProxyProtocol) (and (not .Values.nginx.http.enabled) .Values.nginx.httpsUseProxyProtocol) }}
+{{- printf "%s" "--haproxy-protocol" -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 nginx command
@@ -526,8 +624,10 @@ nginx port (8080/8443) based on http/https enabled
 {{- define "nginx.port" -}}
 {{- if .Values.nginx.http.enabled -}}
 {{- .Values.nginx.http.internalPort -}}
-{{- else -}}
+{{- else if include "nginx.httpsEffective" . -}}
 {{- .Values.nginx.https.internalPort -}}
+{{- else -}}
+{{- .Values.nginx.http.internalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -576,18 +676,6 @@ nodeSelector:
 {{ toYaml .Values.global.nodeSelector | indent 2 }}
 {{- else if .Values.artifactory.primary.nodeSelector }}
 {{ toYaml .Values.artifactory.primary.nodeSelector | indent 2 }}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Resolve Artifactory pod node nodeselector value
-*/}}
-{{- define "artifactory.node.nodeSelector" -}}
-nodeSelector:
-{{- if .Values.global.nodeSelector }}
-{{ toYaml .Values.global.nodeSelector | indent 2 }}
-{{- else if .Values.artifactory.node.nodeSelector }}
-{{ toYaml .Values.artifactory.node.nodeSelector | indent 2 }}
 {{- end -}}
 {{- end -}}
 
@@ -722,7 +810,7 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- else if .Values.rtfs.jfrogUrl -}}
 {{- .Values.rtfs.jfrogUrl -}}
 {{- else -}}
-{{- printf "http://%s:8082" (include "artifactory-ha.fullname" .) -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -750,6 +838,18 @@ Resolve customVolumes value
 {{- define "artifactory.rtfs.customVolumes" -}}
 {{- if .Values.rtfs.customVolumes -}}
 {{- .Values.rtfs.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.rtfs.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.rtfs.customVolumes -}}
+{{- $val := (tpl (include "artifactory.rtfs.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
 {{- end -}}
 {{- end -}}
 
@@ -806,7 +906,7 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- else if .Values.apptrust.jfrogUrl -}}
 {{- .Values.apptrust.jfrogUrl -}}
 {{- else -}}
-{{- printf "http://%s:%s" (include "artifactory-ha.fullname" .) (toString .Values.router.externalPort) -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -834,6 +934,18 @@ Resolve customVolumes value
 {{- define "artifactory.apptrust.customVolumes" -}}
 {{- if .Values.apptrust.customVolumes -}}
 {{- .Values.apptrust.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.apptrust.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.apptrust.customVolumes -}}
+{{- $val := (tpl (include "artifactory.apptrust.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
 {{- end -}}
 {{- end -}}
 
@@ -890,7 +1002,7 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- else if .Values.unifiedpolicy.jfrogUrl -}}
 {{- .Values.unifiedpolicy.jfrogUrl -}}
 {{- else -}}
-{{- printf "http://%s:%s" (include "artifactory-ha.fullname" .) (toString .Values.router.externalPort) -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -922,6 +1034,18 @@ Resolve customVolumes value
 {{- end -}}
 
 {{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.unifiedpolicy.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.unifiedpolicy.customVolumes -}}
+{{- $val := (tpl (include "artifactory.unifiedpolicy.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 unifiedpolicy command
 */}}
 {{- define "unifiedpolicy.command" -}}
@@ -945,6 +1069,102 @@ Resolve unifiedpolicy autoscalling metrics
 {{- define "unifiedpolicy.metrics" -}}
 {{- if .Values.unifiedpolicy.autoscaling.metrics -}}
 {{- .Values.unifiedpolicy.autoscaling.metrics -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create a default fully qualified app name for evaluation.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+*/}}
+{{- define "evaluation.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- printf "%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") .Values.evaluation.name -}}
+{{- else -}}
+{{- printf "%s-%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") $name .Values.evaluation.name -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+    Resolve jfrogUrl value
+*/}}
+{{- define "evaluation.jfrogUrl" -}}
+{{- if .Values.global.jfrogUrl -}}
+{{- .Values.global.jfrogUrl -}}
+{{- else if .Values.evaluation.jfrogUrl -}}
+{{- .Values.evaluation.jfrogUrl -}}
+{{- else -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve evaluation customSidecarContainers value
+*/}}
+{{- define "artifactory.evaluation.customSidecarContainers" -}}
+{{- if .Values.evaluation.customSidecarContainers -}}
+{{- .Values.evaluation.customSidecarContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve evaluation customInitContainers value
+*/}}
+{{- define "artifactory.evaluation.customInitContainers" -}}
+{{- if .Values.evaluation.customInitContainers -}}
+{{- .Values.evaluation.customInitContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve customVolumes value
+*/}}
+{{- define "artifactory.evaluation.customVolumes" -}}
+{{- if .Values.evaluation.customVolumes -}}
+{{- .Values.evaluation.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.evaluation.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.evaluation.customVolumes -}}
+{{- $val := (tpl (include "artifactory.evaluation.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+evaluation command
+*/}}
+{{- define "evaluation.command" -}}
+{{- if .Values.evaluation.customCommand }}
+{{  toYaml .Values.evaluation.customCommand }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolve customVolumeMounts evaluation value
+*/}}
+{{- define "artifactory.evaluation.customVolumeMounts" -}}
+{{- if .Values.evaluation.customVolumeMounts -}}
+{{- .Values.evaluation.customVolumeMounts -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve evaluation autoscalling metrics
+*/}}
+{{- define "evaluation.metrics" -}}
+{{- if .Values.evaluation.autoscaling.metrics -}}
+{{- .Values.evaluation.autoscaling.metrics -}}
 {{- end -}}
 {{- end -}}
 
@@ -1015,6 +1235,18 @@ Resolve JFbus customVolumes value
 {{- end -}}
 
 {{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.jfbus.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.jfbus.customVolumes -}}
+{{- $val := (tpl (include "artifactory.jfbus.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Resolve Artifactory autoscalling metrics
 */}}
 {{- define "artifactory.hpametrics" -}}
@@ -1041,7 +1273,7 @@ Resolve jfrogUrl for JFbus service
 {{- else if .Values.jfbus.jfrogUrl -}}
 {{- .Values.jfbus.jfrogUrl -}}
 {{- else -}}
-{{- printf "http://%s:8082" (include "artifactory-ha.fullname" .) -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -1081,6 +1313,139 @@ Resolve JFbus autoscalling metrics
 {{- end -}}
 {{- end -}}
 
+
+{{/* JFMelt */}}
+
+{{/*
+True when jfconnect is supported (Pro) and enabled in values.
+*/}}
+{{- define "artifactory-ha.jfconnect.supported" -}}
+{{- if and .Values.jfconnect.enabled (not (regexMatch "^.*(oss|cpp-ce|jcr).*$" .Values.artifactory.image.repository)) -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end -}}
+
+{{/*
+jfmelt is only deployed when enabled, both jfbus and jfconnect are available, and a database is configured.
+jfmelt requires a database to start; without one (no bundled postgresql and no external database) it must not be deployed.
+*/}}
+{{- define "artifactory-ha.jfmelt.enabled" -}}
+{{- if and .Values.jfmelt.enabled .Values.jfbus.enabled (eq (include "artifactory-ha.jfconnect.supported" .) "true") -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create a default fully qualified JFmelt name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+*/}}
+{{- define "jfmelt.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- printf "%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") .Values.jfmelt.name -}}
+{{- else -}}
+{{- printf "%s-%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") $name .Values.jfmelt.name -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Custom certificate copy command for jfmelt
+*/}}
+{{- define "jfmelt.copyCustomCerts" -}}
+echo "Copy custom certificates to {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted";
+mkdir -p {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted;
+for file in $(ls -1 /tmp/certs/* | grep -v .key | grep -v ":" | grep -v grep); do if [ -f "${file}" ]; then cp -v ${file} {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted; fi done;
+if [ -f {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted/tls.crt ]; then mv -v {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted/tls.crt {{ .Values.jfmelt.persistence.mountPath }}/etc/security/keys/trusted/ca.crt; fi;
+{{- end -}}
+
+{{/*
+Resolve JFmelt customVolumes value
+*/}}
+{{- define "artifactory.jfmelt.customVolumes" -}}
+{{- if .Values.jfmelt.customVolumes -}}
+{{- .Values.jfmelt.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.jfmelt.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.jfmelt.customVolumes -}}
+{{- $val := (tpl (include "artifactory.jfmelt.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+JFmelt command
+*/}}
+{{- define "jfmelt.command" -}}
+{{- if .Values.jfmelt.customCommand }}
+{{ toYaml .Values.jfmelt.customCommand }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolve jfrogUrl for JFmelt service
+*/}}
+{{- define "jfmelt.jfrogUrl" -}}
+{{- if .Values.global.jfrogUrl -}}
+{{- .Values.global.jfrogUrl -}}
+{{- else if .Values.jfmelt.jfrogUrl -}}
+{{- .Values.jfmelt.jfrogUrl -}}
+{{- else -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve customVolumeMounts jfmelt value
+*/}}
+{{- define "artifactory.jfmelt.customVolumeMounts" -}}
+{{- if .Values.jfmelt.customVolumeMounts -}}
+{{- .Values.jfmelt.customVolumeMounts -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve JFmelt customSidecarContainers value
+*/}}
+{{- define "artifactory.jfmelt.customSidecarContainers" -}}
+{{- if .Values.jfmelt.customSidecarContainers -}}
+{{- .Values.jfmelt.customSidecarContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve JFmelt customInitContainers value
+*/}}
+{{- define "artifactory.jfmelt.customInitContainers" -}}
+{{- if .Values.jfmelt.customInitContainers -}}
+{{- .Values.jfmelt.customInitContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve JFmelt autoscaling metrics
+*/}}
+{{- define "jfmelt.metrics" -}}
+{{- if .Values.jfmelt.autoscaling.metrics -}}
+{{- .Values.jfmelt.autoscaling.metrics -}}
+{{- end -}}
+{{- end -}}
+
+
 {{/* PlatformFederation */}}
 {{/*
 Create a default fully qualified PlatformFederation name.
@@ -1109,6 +1474,18 @@ Resolve PlatformFederation customVolumes value
 {{- end -}}
 
 {{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.platformfederation.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.platformfederation.customVolumes -}}
+{{- $val := (tpl (include "artifactory.platformfederation.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 PlatformFederation command
 */}}
 {{- define "platformfederation.command" -}}
@@ -1126,7 +1503,7 @@ Resolve jfrogUrl for PlatformFederation service
 {{- else if .Values.platformfederation.jfrogUrl -}}
 {{- .Values.platformfederation.jfrogUrl -}}
 {{- else -}}
-{{- printf "http://%s:%s" (include "artifactory-ha.fullname" .) (toString .Values.router.externalPort) -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
 {{- end -}}
 {{- end -}}
 
@@ -1164,4 +1541,297 @@ Resolve PlatformFederation autoscalling metrics
 {{- if .Values.platformfederation.autoscaling.metrics -}}
 {{- .Values.platformfederation.autoscaling.metrics -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+#############################
+## Frontend Pod Helpers
+#############################
+*/}}
+
+{{/*
+Create a default fully qualified app name for frontend.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+*/}}
+{{- define "frontend.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- printf "%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") .Values.frontend.name -}}
+{{- else -}}
+{{- printf "%s-%s-%s" (.Release.Name | trunc 63 | trimSuffix "-") $name .Values.frontend.name -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve frontend customInitContainers value
+*/}}
+{{- define "artifactory.frontend.customInitContainers" -}}
+{{- if .Values.frontend.customInitContainers -}}
+{{- .Values.frontend.customInitContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve frontend customSidecarContainers value
+*/}}
+{{- define "artifactory.frontend.customSidecarContainers" -}}
+{{- if .Values.frontend.customSidecarContainers -}}
+{{- .Values.frontend.customSidecarContainers -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve frontend customVolumes value
+*/}}
+{{- define "artifactory.frontend.customVolumes" -}}
+{{- if .Values.frontend.customVolumes -}}
+{{- .Values.frontend.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve frontend customVolumeMounts value
+*/}}
+{{- define "artifactory.frontend.customVolumeMounts" -}}
+{{- if .Values.frontend.customVolumeMounts -}}
+{{- .Values.frontend.customVolumeMounts -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve frontend autoscaling metrics
+*/}}
+{{- define "frontend.metrics" -}}
+{{- if .Values.frontend.autoscaling.metrics -}}
+{{- .Values.frontend.autoscaling.metrics -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve jfrogUrl value
+*/}}
+{{- define "artifactory-ha.jfrogUrl" -}}
+{{- if .Values.global.jfrogUrl -}}
+{{- .Values.global.jfrogUrl -}}
+{{- else if .Values.jfrogUrl -}}
+{{- .Values.jfrogUrl -}}
+{{- else -}}
+{{- printf "%s://%s:%v" (include "artifactory-ha.scheme" .) (include "artifactory-ha.fullname" .) .Values.artifactory.externalPort -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve observability customVolumes value
+*/}}
+{{- define "artifactory-ha.observability.customVolumes" -}}
+{{- if .Values.observability.customVolumes -}}
+{{- .Values.observability.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve router customVolumes value
+*/}}
+{{- define "artifactory-ha.router.customVolumes" -}}
+{{- if .Values.router.customVolumes -}}
+{{- .Values.router.customVolumes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Check the Duplication of volume names for secrets. If unifiedSecretInstallation is enabled then the method is checking for volume names,
+if the volume exists in customVolume then an extra volume with the same name will not be getting added in unifiedSecretInstallation case.*/}}
+{{- define "artifactory-ha.frontend.checkDuplicateUnifiedCustomVolume" -}}
+{{- if .Values.frontend.customVolumes -}}
+{{- $val := (tpl (include "artifactory.frontend.customVolumes" .) .) | toJson -}}
+{{- contains (include "artifactory-ha.unifiedCustomSecretVolumeName" .) $val | toString -}}
+{{- else -}}
+{{- printf "%s" "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Returns "true" if join key is supplied via global/artifactory joinKey or *joinKeySecretName (non-empty).
+*/}}
+{{- define "artifactory.valuesJoinKeySourcePresent" -}}
+{{- if or .Values.global.joinKey .Values.artifactory.joinKey .Values.global.joinKeySecretName .Values.artifactory.joinKeySecretName -}}
+{{- printf "true" -}}
+{{- else -}}
+{{- printf "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Returns "true" if master key is supplied via global/artifactory masterKey or *masterKeySecretName (non-empty).
+*/}}
+{{- define "artifactory.valuesMasterKeySourcePresent" -}}
+{{- if or .Values.global.masterKey .Values.artifactory.masterKey .Values.global.masterKeySecretName .Values.artifactory.masterKeySecretName -}}
+{{- printf "true" -}}
+{{- else -}}
+{{- printf "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+"true" if join key is resolvable from Helm values (global/artifactory joinKey or *joinKeySecretName).
+*/}}
+{{- define "artifactory.joinKeyResolvable" -}}
+{{- include "artifactory.valuesJoinKeySourcePresent" . -}}
+{{- end -}}
+
+{{/*
+"true" if master key is resolvable from Helm values (global/artifactory masterKey or *masterKeySecretName).
+*/}}
+{{- define "artifactory.masterKeyResolvable" -}}
+{{- include "artifactory.valuesMasterKeySourcePresent" . -}}
+{{- end -}}
+
+{{/*
+Single gate: "true" only if both join key and master key can be resolved.
+*/}}
+{{- define "artifactory.mandatoryKeysConfigurationValid" -}}
+{{- if and (eq (include "artifactory.joinKeyResolvable" .) "true") (eq (include "artifactory.masterKeyResolvable" .) "true") -}}
+{{- printf "true" -}}
+{{- else -}}
+{{- printf "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Multi-line error when keysPassedViaSystemyaml fails. Partial messages when only one key is missing; full message when both missing.
+*/}}
+{{- define "artifactory.mandatoryKeysValidationFailMessage" -}}
+{{- $joinOk := eq (include "artifactory.joinKeyResolvable" .) "true" -}}
+{{- $masterOk := eq (include "artifactory.masterKeyResolvable" .) "true" -}}
+{{- print "\n********JFrog has introduced new services (e.g., JFbus, Frontend) that are now managed as independent deployments. These services now require a Master Key and a Join Key for mandatory configuration********" -}}
+{{- if and $joinOk (not $masterOk) -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: MISSING MASTER_KEY (Artifactory)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "Join key is already provided; you still need the master key.\n\n" -}}
+{{- print "👉 STEP 1: PROVIDE MASTER KEY\n" -}}
+{{- print "   • FRESH INSTALL — GENERATE A MASTER KEY:\n" -}}
+{{- print "       export MASTER_KEY=$(openssl rand -hex 32)\n\n" -}}
+{{- print "   • UPGRADE — RETRIEVE EXISTING KEY FROM NODE (Via CLI):\n" -}}
+{{- printf "       export MASTER_KEY=$(kubectl exec -it %s-0 -n %s -c %s -- cat /opt/jfrog/artifactory/var/etc/security/master.key)\n\n" (include "artifactory-ha.primary.name" .) .Release.Namespace .Values.artifactory.name -}}
+{{- print "👉 STEP 2: PASS KEY VIA HELM VALUES\n" -}}
+{{- print "    OPTION 1: (Production Recommended): PASS KUBERNETES SECRETS VIA HELM VALUES \n\n" -}}
+{{- print "      Create a kubernetes secret\n\n" -}}
+{{- print "      kubectl create secret generic artifactory-mandatory-keys -n <namespace> \\\n" -}}
+{{- print "      --from-literal=master-key=${MASTER_KEY} \n\n" -}}
+{{- print "      Reference the secret name in helm values\n\n" -}}
+{{- print "      --set global.masterKeySecretName=artifactory-mandatory-keys \n\n" -}}
+{{- print "    OPTION 2: PASS KEYS VIA HELM VALUES\n" -}}
+{{- print "      --set global.masterKey=${MASTER_KEY}\n\n" -}}
+{{- print "👉 KEYS EXISTING IN SYSTEM YAML: If keys are already defined in system.yaml(via extraSystemYaml, systemYaml, or systemYamlOverride), skip previous steps and use the flag\n" -}}
+{{- print "   - --set keysPassedViaSystemyaml=true\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "    https://docs.jfrog.com/installation/docs/helm-charts#install-jfrog-artifactory-using-helm\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- else if and $masterOk (not $joinOk) -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: MISSING JOIN_KEY (Artifactory)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "Master key is already provided; you still need the join key.\n\n" -}}
+{{- print "👉 STEP 1: PROVIDE JOIN KEY\n" -}}
+{{- print "   • FRESH INSTALL — GENERATE A JOIN KEY:\n" -}}
+{{- print "       export JOIN_KEY=$(openssl rand -hex 32)\n\n" -}}
+{{- print "   • UPGRADE — RETRIEVE EXISTING JOIN KEY (Via UI):\n" -}}
+{{- print "       Administration -> Security -> General -> Connection Details\n" -}}
+{{- print "       -> Enter Password -> Join Key (copy to JOIN_KEY env)\n\n" -}}
+{{- print "👉 STEP 2: PASS JOIN KEY TO HELM\n" -}}
+{{- print "    OPTION 1: (Production Recommended): PASS KUBERNETES SECRETS VIA HELM VALUES \n\n" -}}
+{{- print "      Create a kubernetes secret\n\n" -}}
+{{- print "      kubectl create secret generic artifactory-mandatory-keys -n <namespace> \\\n" -}}
+{{- print "      --from-literal=join-key=${JOIN_KEY} \n\n" -}}
+{{- print "      Reference the secret name in helm values\n\n" -}}
+{{- print "      --set global.joinKeySecretName=artifactory-mandatory-keys \n\n" -}}
+{{- print "    OPTION 2: PASS KEYS VIA HELM VALUES\n" -}}
+{{- print "      --set global.joinKey=${JOIN_KEY}\n\n" -}}
+{{- print "👉 KEYS EXISTING IN SYSTEM YAML: If keys are already defined in system.yaml(via extraSystemYaml, systemYaml, or systemYamlOverride), skip previous steps and use the flag\n" -}}
+{{- print "   - --set keysPassedViaSystemyaml=true\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "    https://docs.jfrog.com/installation/docs/helm-charts#install-jfrog-artifactory-using-helm\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- else -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: MISSING MANDATORY KEYS (Artifactory)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "Artifactory requires a Master Key and a Join Key.\n\n" -}}
+{{- print "👉 STEP 1: PROVIDE KEYS\n" -}}
+{{- print "   • FRESH INSTALL — GENERATE SECURE KEYS:\n" -}}
+{{- print "       export MASTER_KEY=$(openssl rand -hex 32)\n" -}}
+{{- print "       export JOIN_KEY=$(openssl rand -hex 32)\n\n" -}}
+{{- print "   • UPGRADE — RETRIEVE EXISTING KEYS:\n" -}}
+{{- print "       JOIN KEY (Via UI):\n" -}}
+{{- print "         Administration -> Security -> General -> Connection Details\n" -}}
+{{- print "         -> Enter Password -> Join Key (copy to JOIN_KEY env)\n" -}}
+{{- print "       MASTER KEY (Via CLI):\n" -}}
+{{- printf "         export MASTER_KEY=$(kubectl exec -it %s-0 -n %s -c %s -- cat /opt/jfrog/artifactory/var/etc/security/master.key)\n\n" (include "artifactory-ha.primary.name" .) .Release.Namespace .Values.artifactory.name -}}
+{{- print "👉 STEP 2: PASS KEYS TO HELM\n" -}}
+{{- print "    OPTION 1: (Production Recommended): PASS KUBERNETES SECRETS VIA HELM VALUES\n\n" -}}
+{{- print "      Create a kubernetes secret\n\n" -}}
+{{- print "      kubectl create secret generic artifactory-mandatory-keys -n <namespace> \\\n" -}}
+{{- print "      --from-literal=master-key=${MASTER_KEY} \\\n" -}}
+{{- print "      --from-literal=join-key=${JOIN_KEY}\n\n" -}}
+{{- print "      Reference the secret name in helm values\n\n" -}}
+{{- print "      --set global.masterKeySecretName=artifactory-mandatory-keys \\\n" -}}
+{{- print "      --set global.joinKeySecretName=artifactory-mandatory-keys\n\n" -}}
+{{- print "    OPTION 2: PASS KEYS VIA HELM VALUES\n" -}}
+{{- print "      --set global.masterKey=${MASTER_KEY} \\\n" -}}
+{{- print "      --set global.joinKey=${JOIN_KEY}\n\n" -}}
+{{- print "👉 KEYS EXISTING IN SYSTEM YAML: If keys are already defined in system.yaml(via extraSystemYaml, systemYaml, or systemYamlOverride), skip previous steps and use the flag\n" -}}
+{{- print "    - --set keysPassedViaSystemyaml=true\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "    https://docs.jfrog.com/installation/docs/helm-charts#install-jfrog-artifactory-using-helm\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "\n" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "artifactory.aimlValidationFailMessage" -}}
+{{- print "\n********JFrog AIML mode (ml.enabled) integrates Artifactory with JFrog ML, which is delivered through the JFConnect service********" -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: AIML REQUIRES JFCONNECT SERVICE (Artifactory)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "You have enabled AIML features (`ml.enabled=true`), but the required supporting\n" -}}
+{{- print "service, JFConnect, has been explicitly disabled (`jfconnect.enabled=false`).\n\n" -}}
+{{- print "JFConnect must be enabled to use AIML. It's enabled by default. Re-enable if it's been disabled.\n\n" -}}
+{{- print "👉 REMEDIATION:\n" -}}
+{{- print "  • To use AIML features, ensure JFConnect remains enabled (remove the disable flag):\n" -}}
+{{- print "    --set jfconnect.enabled=true\n\n\n" -}}
+{{- print "  • If you intentionally disabled JFConnect, you must also disable AIML:\n" -}}
+{{- print "    --set ml.enabled=false\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "  https://docs.jfrog.com/installation/docs/activate-ai-ml\n" -}}
+{{- print "\n" -}}
+{{- end -}}
+
+{{- define "artifactory.aimlAirgapValidationFailMessage" -}}
+{{- print "\n********JFrog AIML mode (ml.enabled) requires a direct internet connection to https://grpc.qwak.ai (proxy not supported), which is not available in an air-gapped environment********" -}}
+{{- print "\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print " 🛑  ERROR: AIML IS NOT SUPPORTED IN AIR-GAPPED ENVIRONMENT (Artifactory)\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "You have enabled AIML features (`ml.enabled=true`), but your environment is\n" -}}
+{{- print "configured as air-gapped (`jfconnect.airgap.enabled=true`).\n\n" -}}
+{{- print "JFrog AIML features require a direct outbound internet connection to\n" -}}
+{{- print "https://grpc.qwak.ai (proxies are not supported). It cannot function in an air-gapped environment.\n\n" -}}
+{{- print "👉 REMEDIATION:\n" -}}
+{{- print "  • If your environment must remain air-gapped, you must disable AIML:\n" -}}
+{{- print "    --set ml.enabled=false\n\n" -}}
+{{- print "  • To use AIML, disable air-gapped mode and allow direct outbound traffic to grpc.qwak.ai:\n" -}}
+{{- print "    --set jfconnect.airgap.enabled=false\n\n" -}}
+{{- print "📚 TO LEARN MORE:\n" -}}
+{{- print "  https://docs.jfrog.com/installation/docs/activate-ai-ml\n" -}}
+{{- print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" -}}
+{{- print "\n" -}}
 {{- end -}}
