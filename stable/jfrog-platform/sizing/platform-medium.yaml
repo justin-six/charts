@@ -82,10 +82,10 @@ artifactory:
     resources:
       requests:
         cpu: 100m
-        memory: 150Mi
+        memory: 500Mi
       limits:
         # cpu: "2"
-        memory: 250Mi
+        memory: 1Gi
   
   metadata:
     database:
@@ -217,11 +217,47 @@ artifactory:
         # cpu: "2"
         memory: 3500Mi
   
+  jfmelt:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1Gi
+  
   platformfederation:
     resources:
       requests:
         cpu: 150m
         memory: 150Mi
+      limits:
+        # cpu: "2"
+        memory: 1Gi
+  
+  apptrust:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1Gi
+  
+  unifiedpolicy:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1Gi
+  
+  evaluation:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 500Mi
       limits:
         # cpu: "2"
         memory: 1Gi
@@ -302,15 +338,6 @@ xray:
       limits:
         # cpu: "1"
         memory: 250Mi
-  
-  panoramic:
-    resources:
-      requests:
-        cpu: "100m"
-        memory: 250Mi
-      limits:
-        # cpu: "4"
-        memory: 8Gi
   
   sbom:
     resources:
