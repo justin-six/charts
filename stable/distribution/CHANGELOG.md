@@ -1,8 +1,17 @@
 # JFrog Distribution Chart Changelog
 All changes to this project chart be documented in this file.
 
-## [102.37.0] - Jan 19, 2026
-* Removed Redis - no longer part of Distribution
+## [102.89.0] - Jul 21, 2026
+* Upgraded postgres image tag version to `17.10-helm-20260716`
+
+## [102.41.0] - Jun 11, 2026
+* Switch initContainer image from ubi-minimal to jfrog/echo-mini
+* Run container shell scripts (observability container command and logger sidecars) with `/bin/bash` instead of `/bin/sh`, since the new echo images are Debian-based (`/bin/sh` is dash) and these scripts use bash-only syntax
+
+## [102.37.0] - Mar 20, 2026
+* Upgrade postgres image version to `17.10` (`17.10-helm`)
+* Migrate bundled postgres image from `bitnami/postgresql` to `echohq/postgres`
+* Removed Redis - no longer part of Distribution and updated readme
 
 ## [102.35.0] - Dec 02, 2025
 * Added support for the environment variable `JF_SHARED_NODE_POD_IP`. Its value will be used for `shared.node.ip` if a specific `shared.node.ip` is not provided
