@@ -84,12 +84,13 @@ router:
       memory: 2Gi
 
 frontend:
+  replicaCount: 3
   resources:
     requests:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 200m
+      memory: 800Mi
     limits:
-      # cpu: "5"
+      # cpu: "2"
       memory: 2Gi
 
 metadata:
@@ -205,6 +206,7 @@ evidence:
       memory: 2Gi
 
 rtfs:
+  replicaCount: 3
   resources:
     requests:
       cpu: 500m
@@ -214,6 +216,7 @@ rtfs:
       memory: 3500Mi
 
 jfbus:
+  replicaCount: 3
   resources:
     requests:
       cpu: 500m
@@ -222,11 +225,52 @@ jfbus:
       # cpu: "2"
       memory: 3500Mi
 
+jfmelt:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1Gi
+
 platformfederation:
+  replicaCount: 3
   resources:
     requests:
       cpu: 150m
       memory: 160Mi
     limits:
       # cpu: "1"
+      memory: 1.5Gi
+
+apptrust:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1.5Gi
+
+unifiedpolicy:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
+      memory: 1.5Gi
+
+evaluation:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 1
+      memory: 500Mi
+    limits:
+      # cpu: "2"
       memory: 1.5Gi
