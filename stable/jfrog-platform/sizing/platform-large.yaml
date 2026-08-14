@@ -79,12 +79,13 @@ artifactory:
         memory: 2Gi
   
   frontend:
+    replicaCount: 3
     resources:
       requests:
-        cpu: "1"
-        memory: 1Gi
+        cpu: 200m
+        memory: 800Mi
       limits:
-        # cpu: "5"
+        # cpu: "2"
         memory: 2Gi
   
   metadata:
@@ -201,6 +202,7 @@ artifactory:
         memory: 2Gi
   
   rtfs:
+    replicaCount: 3
     resources:
       requests:
         cpu: 500m
@@ -210,6 +212,7 @@ artifactory:
         memory: 3500Mi
   
   jfbus:
+    replicaCount: 3
     resources:
       requests:
         cpu: 500m
@@ -218,13 +221,54 @@ artifactory:
         # cpu: "2"
         memory: 3500Mi
   
+  jfmelt:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 500m
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1Gi
+  
   platformfederation:
+    replicaCount: 3
     resources:
       requests:
         cpu: 150m
         memory: 160Mi
       limits:
         # cpu: "1"
+        memory: 1.5Gi
+  
+  apptrust:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 1
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1.5Gi
+  
+  unifiedpolicy:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 1
+        memory: 500Mi
+      limits:
+        # cpu: "2"
+        memory: 1.5Gi
+  
+  evaluation:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 1
+        memory: 500Mi
+      limits:
+        # cpu: "2"
         memory: 1.5Gi
 xray:
   ##############################################################
@@ -304,15 +348,6 @@ xray:
         # cpu: "1"
         memory: 250Mi
   
-  panoramic:
-    resources:
-      requests:
-        cpu: "100m"
-        memory: 250Mi
-      limits:
-        # cpu: "4"
-        memory: 8Gi
-  
   sbom:
     resources:
       requests:
@@ -361,6 +396,40 @@ xray:
                       - xray
               topologyKey: kubernetes.io/hostname
   
+  catalog:
+    resources:
+      requests:
+        cpu: "4"
+        memory: 8Gi
+      limits:
+        cpu: "8"
+        memory: 16Gi
+  
+  valkey:
+    primary:
+      resources:
+        requests:
+          cpu: "2"
+          memory: 4Gi
+        limits:
+          cpu: "4"
+          memory: 8Gi
+    replica:
+      resources:
+        requests:
+          cpu: "2"
+          memory: 4Gi
+        limits:
+          cpu: "4"
+          memory: 8Gi
+    sentinel:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
 rabbitmq:
   extraConfiguration: |-
     vm_memory_high_watermark.absolute = 3G
