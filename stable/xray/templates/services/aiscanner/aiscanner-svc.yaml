@@ -2,14 +2,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "xray.fullname" . }}-sbom-headless
+  name: {{ template "xray.fullname" . }}-aiscanner-headless
   labels:
-    app: {{ template "xray.name" . }}
+    app: {{ template "xray.fullname" . }}
     chart: {{ template "xray.chart" . }}
     component: {{ .Values.xray.name }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: aiscanner
     {{- with .Values.xray.labels }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -24,15 +24,15 @@ spec:
     port: {{ .Values.router.externalPort }}
     protocol: TCP
     targetPort: {{ .Values.router.internalPort }}
-{{- if .Values.sbom.enabled }}
-  - name: http-sbom
-    port: {{ .Values.sbom.externalPort }}
+{{- if .Values.aiscanner.enabled }}
+  - name: http-aiscanner
+    port: {{ .Values.aiscanner.externalPort }}
     protocol: TCP
-    targetPort: {{ .Values.sbom.internalPort }}
+    targetPort: {{ .Values.aiscanner.internalPort }}
 {{- end }}
   selector:
     app: {{ template "xray.name" . }}
     component: {{ .Values.xray.name }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: aiscanner
 {{- end }}

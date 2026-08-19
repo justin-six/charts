@@ -75,15 +75,6 @@ observability:
       # cpu: "1"
       memory: 250Mi
 
-panoramic:
-  resources:
-    requests:
-      cpu: "100m"
-      memory: 250Mi
-    limits:
-      # cpu: "4"
-      memory: 8Gi
-
 sbom:
   resources:
     requests:
@@ -155,3 +146,50 @@ rabbitmq:
                 values:
                   - xray
           topologyKey: kubernetes.io/hostname
+
+catalog:
+  resources:
+    requests:
+      cpu: "4"
+      memory: 8Gi
+    limits:
+      cpu: "8"
+      memory: 16Gi
+
+valkey:
+  primary:
+    resources:
+      requests:
+        cpu: "2"
+        memory: 4Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    ## Bound the cache below limits.memory so Valkey evicts instead of being
+    ## OOMKilled. The headroom covers fork() copy-on-write during AOF rewrite,
+    ## replication buffers and allocator fragmentation.
+    ## Applied when sentinel.enabled=false; keep in sync with limits.memory.
+    configuration: |-
+      maxmemory 6gb
+      maxmemory-policy allkeys-lru
+  replica:
+    resources:
+      requests:
+        cpu: "2"
+        memory: 4Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    ## With sentinel.enabled=true (the default) every node runs from this
+    ## block, so this is the setting that actually takes effect.
+    configuration: |-
+      maxmemory 6gb
+      maxmemory-policy allkeys-lru
+  sentinel:
+    resources:
+      requests:
+        cpu: "250m"
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
