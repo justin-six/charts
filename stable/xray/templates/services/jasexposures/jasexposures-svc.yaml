@@ -1,15 +1,15 @@
-{{- if .Values.splitXraytoSeparateDeployments.fullSplit }}
+{{- if and (.Values.splitXraytoSeparateDeployments.fullSplit) (or .Values.jasexposures.enabled .Values.jas.separate.service.enabled) }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "xray.fullname" . }}-sbom-headless
+  name: {{ template "xray.fullname" . }}-jasexposures-headless
   labels:
-    app: {{ template "xray.name" . }}
+    app: {{ template "xray.fullname" . }}
     chart: {{ template "xray.chart" . }}
     component: {{ .Values.xray.name }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: jasexposures
     {{- with .Values.xray.labels }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -24,15 +24,13 @@ spec:
     port: {{ .Values.router.externalPort }}
     protocol: TCP
     targetPort: {{ .Values.router.internalPort }}
-{{- if .Values.sbom.enabled }}
-  - name: http-sbom
-    port: {{ .Values.sbom.externalPort }}
+  - name: http-jasexp
+    port: {{ .Values.jasexposures.externalPort }}
     protocol: TCP
-    targetPort: {{ .Values.sbom.internalPort }}
-{{- end }}
+    targetPort: {{ .Values.jasexposures.internalPort }}
   selector:
     app: {{ template "xray.name" . }}
     component: {{ .Values.xray.name }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: jasexposures
 {{- end }}
