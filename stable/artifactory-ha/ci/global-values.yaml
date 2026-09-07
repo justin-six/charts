@@ -13,20 +13,12 @@ artifactory:
     javaOpts:
       xms: "4g"
       xmx: "4g"
-  node:
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "2"
-      limits:
-        memory: "6Gi"
-        cpu: "4"
   customInitContainersBegin: |
    - name: "custom-init-begin-local"
      image: {{ include "artifactory-ha.getImageInfoByValue" (list . "initContainers") }}
      imagePullPolicy: {{ .Values.initContainers.image.pullPolicy }}
      command:
-       - 'sh'
+       - 'bash'
        - '-c'
        - echo "running in local"
      volumeMounts:
@@ -37,7 +29,7 @@ artifactory:
      image: {{ include "artifactory-ha.getImageInfoByValue" (list . "initContainers") }}
      imagePullPolicy: {{ .Values.initContainers.image.pullPolicy }}
      command:
-       - 'sh'
+       - 'bash'
        - '-c'
        - echo "running in local"
      volumeMounts:
@@ -62,7 +54,7 @@ artifactory:
        capabilities:
          drop:
            - NET_RAW
-     command: ["sh","-c","echo 'Sidecar is running in local' >> /scriptslocal/sidecarlocal.txt; cat /scriptslocal/sidecarlocal.txt; while true; do sleep 30; done"]
+     command: ["bash","-c","echo 'Sidecar is running in local' >> /scriptslocal/sidecarlocal.txt; cat /scriptslocal/sidecarlocal.txt; while true; do sleep 30; done"]
      volumeMounts:
        - mountPath: "/scriptslocal"
          name: custom-script-local
@@ -77,7 +69,7 @@ artifactory:
 # To Fix ct tool --reuse-values - PASSWORDS ERROR: you must provide your current passwords when upgrade the release
 postgresql:
   auth:
-    password: "password"
+    password: "JfHelmCi-N7qP2vX9mK4wR6tL"
   primary:
     persistence:
       enabled: false
@@ -89,7 +81,7 @@ global:
      image: {{ include "artifactory-ha.getImageInfoByValue" (list . "initContainers") }}
      imagePullPolicy: {{ .Values.initContainers.image.pullPolicy }}
      command:
-       - 'sh'
+       - 'bash'
        - '-c'
        - echo "running in global"
      volumeMounts:
@@ -100,7 +92,7 @@ global:
      image: {{ include "artifactory-ha.getImageInfoByValue" (list . "initContainers") }}
      imagePullPolicy: {{ .Values.initContainers.image.pullPolicy }}
      command:
-       - 'sh'
+       - 'bash'
        - '-c'
        - echo "running in global"
      volumeMounts:
@@ -125,7 +117,7 @@ global:
        capabilities:
          drop:
            - NET_RAW
-     command: ["sh","-c","echo 'Sidecar is running in global' >> /scripts/sidecarglobal.txt; cat /scripts/sidecarglobal.txt; while true; do sleep 30; done"]
+     command: ["bash","-c","echo 'Sidecar is running in global' >> /scripts/sidecarglobal.txt; cat /scripts/sidecarglobal.txt; while true; do sleep 30; done"]
      volumeMounts:
        - mountPath: "/scripts"
          name: custom-script-global
@@ -143,7 +135,7 @@ nginx:
      image: {{ include "artifactory-ha.getImageInfoByValue" (list . "initContainers") }}
      imagePullPolicy: {{ .Values.initContainers.image.pullPolicy }}
      command:
-       - 'sh'
+       - 'bash'
        - '-c'
        - echo "running in nginx"
      volumeMounts:
@@ -158,7 +150,7 @@ nginx:
        capabilities:
          drop:
            - NET_RAW
-     command: ["sh","-c","echo 'Sidecar is running in local' >> /scriptslocal/sidecarlocal.txt; cat /scriptslocal/sidecarlocal.txt; while true; do sleep 30; done"]
+     command: ["bash","-c","echo 'Sidecar is running in local' >> /scriptslocal/sidecarlocal.txt; cat /scriptslocal/sidecarlocal.txt; while true; do sleep 30; done"]
      volumeMounts:
        - mountPath: "/scriptslocal"
          name: custom-script-local
