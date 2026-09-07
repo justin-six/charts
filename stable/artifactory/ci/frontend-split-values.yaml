@@ -1,5 +1,6 @@
 databaseUpgradeReady: true
 artifactory:
+  replicaCount: 1
   joinKey: EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
   masterKey: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   persistence:
@@ -15,12 +16,6 @@ artifactory:
     xms: "4g"
     xmx: "4g"
 
-access:
-  accessConfig:
-    security:
-      tls: true
-  resetAccessCAKeys: true
-
 postgresql:
   auth:
     password: "JfHelmCi-N7qP2vX9mK4wR6tL"
@@ -29,21 +24,11 @@ postgresql:
       enabled: false
     extendedConfiguration: |
       max_connections = 100
-rbac:
-  create: true
-serviceAccount:
-  create: true
-  automountServiceAccountToken: true
 
-ingress:
+frontend:
   enabled: true
-  className: "testclass"
-  hosts:
-    - demonow.xyz
-nginx:
-  enabled: false
-jfconnect:
-  enabled: true
+  asPod: true
+  replicaCount: 1
   resources:
     requests:
       memory: "100Mi"
@@ -51,9 +36,15 @@ jfconnect:
     limits:
       memory: "1Gi"
       cpu: "1"
-mc:
-  enabled: true
-splitServicesToContainers: true
+  lifecycle:
+    postStart:
+      exec:
+        command: ["/bin/bash", "-c", "echo Hello from the frontend postStart handler >> /tmp/message"]
+    preStop:
+      exec:
+        command: ["/bin/bash", "-c", "echo Hello from the frontend preStop handler >> /tmp/message"]
+  autoscaling:
+    enabled: false
 
 router:
   resources:
@@ -63,30 +54,7 @@ router:
     limits:
       memory: "1Gi"
       cpu: "1"
-frontend:
-  resources:
-    requests:
-      memory: "100Mi"
-      cpu: "100m"
-    limits:
-      memory: "1Gi"
-      cpu: "1"
-metadata:
-  resources:
-    requests:
-      memory: "100Mi"
-      cpu: "100m"
-    limits:
-      memory: "1Gi"
-      cpu: "1"
-event:
-  resources:
-    requests:
-      memory: "100Mi"
-      cpu: "100m"
-    limits:
-      memory: "1Gi"
-      cpu: "1"
+
 observability:
   resources:
     requests:
@@ -95,3 +63,12 @@ observability:
     limits:
       memory: "1Gi"
       cpu: "1"
+
+nginx:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: "testclass"
+  hosts:
+    - demonow.xyz
