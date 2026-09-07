@@ -13,14 +13,6 @@ artifactory:
       limits:
         memory: "6Gi"
         cpu: "4"
-  node:
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "2"
-      limits:
-        memory: "6Gi"
-        cpu: "4"
   javaOpts:
     xms: "4g"
     xmx: "4g"
@@ -33,7 +25,7 @@ access:
 
 postgresql:
   auth:
-    password: "password"
+    password: "JfHelmCi-N7qP2vX9mK4wR6tL"
   primary:
     persistence:
       enabled: false
