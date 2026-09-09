@@ -1,5 +1,8 @@
 # JFrog Artifactory High Availability Helm Chart
 
+> [!NOTE]
+> See the [JFrog Helm Charts README](https://github.com/jfrog/charts#container-image-migration-notice) for important notices including the container image migration.
+
 **IMPORTANT!** Our Helm Chart docs have moved to our main documentation site. Below you will find the basic instructions for installing, uninstalling, and deleting Artifactory. For all other information, refer to [Installing Artifactory - Helm HA Installation](https://www.jfrog.com/confluence/display/JFROG/Installing+Artifactory#InstallingArtifactory-HelmHAInstallation).
 
 **Note:** From Artifactory 7.17.4 and above, the Helm HA installation can be installed so that each node you install can run all tasks in the cluster.
@@ -39,6 +42,50 @@ To install the chart with the release name `artifactory`:
 ```bash
 helm upgrade --install artifactory-ha jfrog/artifactory-ha --namespace artifactory-ha --create-namespace
 ```
+
+### Nginx TLS Certificate
+
+Starting with chart version 107.161.x, the chart no longer auto-generates the nginx TLS certificate by default. You must decide how nginx serves HTTPS.
+
+**Fresh install** — with `nginx.https.enabled=true` (the default), the install fails unless one of the following is set:
+
+| Option | Values flag | When to use |
+|---|---|---|
+| Supply your own certificate (recommended) | `--set nginx.tlsSecretName=<name>` | Production; you create a `kubernetes.io/tls` Secret out-of-band |
+| Chart-generated self-signed certificate | `--set nginx.generateSelfSignedCert=true` | Dev / test only — the private key is chart-generated and not issued by a trusted CA |
+| Disable HTTPS entirely | `--set nginx.https.enabled=false` | HTTP-only installs; TLS termination happens elsewhere or is not required |
+
+To generate your own `tls.crt` / `tls.key` for the recommended option, see the JFrog documentation:
+[Establish TLS in Artifactory and the JFrog Platform › Generate Certificates](https://docs.jfrog.com/installation/docs/establish-tls-in-artifactory-and-jfrog-platform#generate-certs).
+
+Supplying your own certificate:
+
+```bash
+kubectl create secret tls artifactory-nginx-tls \
+    --cert=./tls.crt --key=./tls.key -n artifactory-ha
+helm upgrade --install artifactory-ha jfrog/artifactory-ha \
+    --namespace artifactory-ha --create-namespace \
+    --set nginx.tlsSecretName=artifactory-nginx-tls
+```
+
+**Upgrade from earlier chart versions** — if the prior release auto-generated the Secret `<release>-artifactory-ha-nginx-certificate`, this chart discovers it via `helm lookup`, reuses its `tls.crt`/`tls.key` byte-for-byte, and annotates it with `helm.sh/resource-policy: keep`. HTTPS continues to work with no operator action, and the certificate data is not modified.
+
+The reused certificate is still self-signed by the previous chart and is not suitable for production. Replace it with your own certificate on your next upgrade:
+
+```bash
+kubectl create secret tls artifactory-nginx-tls \
+    --cert=./tls.crt --key=./tls.key -n artifactory-ha
+helm upgrade artifactory-ha jfrog/artifactory-ha \
+    --reuse-values --set nginx.tlsSecretName=artifactory-nginx-tls
+```
+
+Once nginx is running on your certificate, the previously auto-generated Secret is retained (`helm.sh/resource-policy: keep`) and can be removed manually:
+
+```bash
+kubectl delete secret <release>-artifactory-ha-nginx-certificate -n artifactory-ha
+```
+
+If a custom certificate is supplied on the first upgrade to version 107.161.x, the legacy auto-generated Secret is deleted by Helm during that upgrade. If you plan to migrate to a custom certificate, no additional cleanup is required.
 
 ### Apply Sizing configurations to the Chart
 To apply the chart with recommended sizing configurations :
