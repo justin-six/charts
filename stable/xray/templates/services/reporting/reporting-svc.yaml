@@ -2,14 +2,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "xray.fullname" . }}-sbom-headless
+  name: {{ template "xray.fullname" . }}-reporting-headless
   labels:
-    app: {{ template "xray.name" . }}
+    app: {{ template "xray.fullname" . }}
     chart: {{ template "xray.chart" . }}
     component: {{ .Values.xray.name }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: reporting
     {{- with .Values.xray.labels }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -24,15 +24,15 @@ spec:
     port: {{ .Values.router.externalPort }}
     protocol: TCP
     targetPort: {{ .Values.router.internalPort }}
-{{- if .Values.sbom.enabled }}
-  - name: http-sbom
-    port: {{ .Values.sbom.externalPort }}
+{{- if .Values.reporting.enabled }}
+  - name: http-reporting
+    port: {{ .Values.reporting.externalPort }}
     protocol: TCP
-    targetPort: {{ .Values.sbom.internalPort }}
+    targetPort: {{ .Values.reporting.internalPort }}
 {{- end }}
   selector:
     app: {{ template "xray.name" . }}
     component: {{ .Values.xray.name }}
     release: {{ .Release.Name }}
-    servicename: sbom
+    servicename: reporting
 {{- end }}
